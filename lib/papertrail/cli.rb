@@ -129,7 +129,7 @@ module Papertrail
           sleep options[:delay]
         end
       elsif options[:min_time]
-        query_time_range
+        query_time_ranges
       else
         set_min_max_time!(options, query_options)
         search_query = Papertrail::SearchQuery.new(connection, @query, query_options)
@@ -137,14 +137,35 @@ module Papertrail
       end
     end
 
-    def query_time_range
+    def query_time_ranges
       min_time = parse_time(options[:min_time])
 
       if options[:max_time]
         max_time = parse_time(options[:max_time])
       end
 
-      connection.each_event(@query, query_options.merge(:min_time => min_time, :max_time => max_time)) do |event|
+      query_window = 600
+      query_options.merge!(:min_time => min_time, :max_time => max_time)
+      if query_options[:max_time] - query_options[:min_time] > query_window
+        multi_time_ranges(query_options, query_window)
+      else
+        query_time_range(query_options)
+      end
+    end
+
+    def multi_time_ranges(query_options, window)
+      end_time = query_options[:max_time]
+      start_time = query_options[:min_time]
+      while start_time < end_time
+        query_options[:min_time] = start_time
+        start_time = start_time + window > end_time ? end_time : start_time + window
+        query_options[:max_time] = start_time
+        query_time_range(query_options)
+      end
+    end
+
+    def query_time_range(query_options)
+      connection.each_event(@query, query_options) do |event|
         if options[:json]
           output_raw_json(event.data)
         else

@@ -10,7 +10,7 @@ Gem::Specification.new do |s|
   ## the sub! line in the Rakefile
   s.name              = 'papertrail'
   s.version           = '0.10.1'
-  s.date              = '2016-12-08'
+  s.date              = '2016-12-22'
   s.rubyforge_project = 'papertrail'
 
   ## Make sure your summary is short. The description may be as long
@@ -48,6 +48,7 @@ Gem::Specification.new do |s|
   ## that are needed for an end user to actually USE your code.
   s.add_dependency('chronic', '~> 0.10')
   s.add_dependency('ansi', '~> 1.5')
+  s.add_dependency('parallel', '~>1.10.0')
 
   ## List your development dependencies here. Development dependencies are
   ## those that are only needed during development

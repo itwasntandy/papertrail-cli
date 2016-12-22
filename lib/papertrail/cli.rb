@@ -2,6 +2,7 @@ require 'optparse'
 require 'yaml'
 require 'chronic'
 require 'ansi/core'
+require 'parallel'
 
 require 'papertrail'
 require 'papertrail/connection'
@@ -21,6 +22,9 @@ module Papertrail
         :token  => ENV['PAPERTRAIL_API_TOKEN'],
         :color  => :program,
         :force_color => false,
+        :parallelize => false,
+        :parallel_threads => 8,
+        :query_window => 900
       }
 
       @query_options = {}
@@ -73,6 +77,15 @@ module Papertrail
                 "Attribute(s) to colorize based on (program)") do |v|
           options[:color] = v
         end
+        opts.on("-p", "--parallelize", "Parallelize queries for faster response, at expense of out of order responses (off)") do |_v|
+          options[:parallelize] = true
+        end
+        opts.on("-w", "--window SECONDS", "The window to timeslice queries into in seconds. (900)") do |v|
+          options[:query_window] = v.to_i
+        end
+        opts.on("-t", "--threads THREADS", "The number of parallel queries to run. Requires '-p' (8)") do |v|
+          options[:parallel_threads] = v.to_i
+        end
         opts.on("--force-color", "Force use of ANSI color characters even on non-tty outputs (off)") do |v|
           options[:force_color] = true
         end
@@ -80,8 +93,7 @@ module Papertrail
           puts "papertrail version #{Papertrail::VERSION}"
           exit
         end
-
-        opts.separator usage
+       opts.separator usage
       end.parse!
 
       if options[:configfile]
@@ -144,7 +156,47 @@ module Papertrail
         max_time = parse_time(options[:max_time])
       end
 
-      connection.each_event(@query, query_options.merge(:min_time => min_time, :max_time => max_time)) do |event|
+      query_window = options[:query_window]
+      query_options.merge!(:min_time => min_time, :max_time => max_time)
+      if query_options[:max_time] - query_options[:min_time] > query_window
+        timeslices = calc_time_slices(query_options, query_window)
+        query_multi_time_ranges(timeslices, options, query_options)
+      else
+        query_single_time_range(query_options)
+      end
+    end
+
+    def calc_time_slices(query_options, window)
+      timeslices = []
+      end_time = query_options[:max_time]
+      start_time = query_options[:min_time]
+      while start_time < end_time
+        t0 = start_time
+        t1 = start_time + window > end_time ? end_time : start_time + window
+        start_time = t1
+        timeslices << [t0, t1]
+      end
+      timeslices
+    end
+
+    def query_multi_time_ranges(timeslices, options, query_options)
+      if options[:parallelize]
+        Parallel.each(timeslices, in_processes: options[:parallel_threads]) do |query|
+          query_options[:min_time] = query[0]
+          query_options[:max_time] = query[1]
+          query_single_time_range(query_options)
+        end
+      else
+        timeslices.each do |query|
+          query_options[:min_time] = query[0]
+          query_options[:max_time] = query[1]
+          query_single_time_range(query_options)
+        end
+      end
+    end
+
+    def query_single_time_range(query_options)
+      connection.each_event(@query, query_options) do |event|
         if options[:json]
           output_raw_json(event.data)
         else

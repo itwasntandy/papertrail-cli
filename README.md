@@ -72,6 +72,9 @@ You may want to alias "pt" to "papertrail", like:
         -d, --delay SECONDS              Delay between refresh (2)
         -c, --configfile PATH            Path to config (~/.papertrail.yml)
         -g, --group GROUP                Group to search
+        -p, --parallelize                Parallelize queries for faster response, at expense of out of order responses (off)
+        -t, --threads THREADS            The number of parallel queries to run. Requires '-p' (8)
+        -w, --window SECONDS             The window to timeslice queries into in seconds. (900)
         -S, --search SEARCH              Saved search to search
         -s, --system SYSTEM              System to search
         -j, --json                       Output raw JSON data (off)
@@ -94,6 +97,7 @@ You may want to alias "pt" to "papertrail", like:
         papertrail -f -g Production --color all "(nginx OR pgsql) -accepted"
         papertrail --min-time 'yesterday at noon' --max-time 'today at 4am' -g Production
         papertrail -- -redis
+        papertrail --min-time 'yesterday at noon' --max-time 'today at 4am' -p -t 10 -w 600 -g Production
 
       More: https://github.com/papertrail/papertrail-cli
             https://papertrailapp.com/
